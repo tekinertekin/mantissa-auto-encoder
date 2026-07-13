@@ -13,6 +13,8 @@ except ImportError:
         "mantissa-cnn is not installed — run: pip install mantissa-cnn"
     ) from None
 
+from .layers import Reshape, Upsample2D
+
 
 def __getattr__(name):
     # PEP 562 lazy import (mantissa-cnn's pattern): importing .datasets
@@ -25,4 +27,4 @@ def __getattr__(name):
 
 
 __version__ = "0.1.0"
-__all__ = ["datasets"]
+__all__ = ["Upsample2D", "Reshape", "datasets"]
