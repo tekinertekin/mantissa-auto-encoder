@@ -172,24 +172,130 @@ sources, sample gallery and download CLI are documented in
 
 ## Results
 
-<!-- BEGIN:BENCH (bench harness output will replace this block; do not edit outside the markers) -->
-**Coming.** The protocol is fixed before the first number is measured
-(constants pinned in `bench/protocol.py`, recipes in
-`mantissa_autoencoder.tasks.TASKS`):
+<!-- BEGIN:BENCH (bench/speed.py + bench/plots.py output; do not edit outside these markers) -->
+Protocol (fixed in `bench/protocol.py` before the first number was
+measured): the **same architecture, re-expressed layer-for-layer in each
+framework** (`torch.nn.Sequential` eager, `tf.keras.Sequential`, our
+encoder/decoder stacks — parameter counts asserted equal by
+`python -m bench.contenders`), identical hyperparameters everywhere —
+plain SGD, lr 0.01, batch 32, 5 epochs, MSE, seed 0 — on stratified
+2000-train / 1000-test subsets, CPU only. Fit wall-time is the median of
+5 interleaved repeats (one untimed warm-up each); reconstruct is a batch
+pass over the 1000-image test subset, median of 20 interleaved calls;
+peak RSS is one fresh subprocess per (contender, task), import cost
+included. Task metrics come from the models the benchmark itself trained.
+`vanilla numpy` is our pure-numpy reference backend — no mantissa engine —
+showing what the C core buys.
 
-- **Four tasks** — denoise (fashion_mnist, Gaussian σ 0.3), compress
-  (mnist, 32-float code, plus the uint8-quantized 40-byte variant),
-  anomaly (mnist, digit 1 held out of training), superres (mnist,
-  28 → 14 → 28).
-- **Contenders** — ours (mantissa engine), ours (numpy backend), torch,
-  tensorflow; the same architecture re-expressed layer-for-layer in each,
-  CPU only.
-- **Budget** — stratified 2000-train / 1000-test subsets, seed 0; 5 epochs,
-  batch 32, lr 0.01, plain SGD everywhere; 5 interleaved repeats, medians
-  reported.
-- **Metrics** — fit wall-time; the task metric (PSNR for denoise /
-  compress / superres, AUC for anomaly); peak RSS in a fresh subprocess
-  per contender, import cost included.
+**denoise** — fashion_mnist, Gaussian σ 0.3 on the input only; the noisy
+test input scores **12.77 dB** against clean, the floor every model must
+beat:
+
+| contender | fit (s) ↓ | reconstruct (ms) ↓ | PSNR (dB) ↑ | peak RSS (MB) ↓ |
+|-----------|----------:|-------------------:|------------:|----------------:|
+| tensorflow | **1.539** | 58.3 | 14.17 | 632 |
+| **ours (mantissa)** | 2.336 | 53.7 | **14.29** | 225 |
+| torch | 4.224 | **48.2** | 14.23 | 385 |
+| vanilla numpy | 6.958 | 236.2 | 14.23 | **213** |
+
+**compress** — mnist through a 32-float code, then uint8-quantized: 32
+code bytes + an 8-byte range header = 40 B/image vs the 784-byte uint8
+original, an honest **19.6×** (quantization costs < 0.001 dB at this code
+size — the float32-code PSNR is in the JSON):
+
+| contender | fit (s) ↓ | reconstruct (ms) ↓ | PSNR @ 19.6× (dB) ↑ | peak RSS (MB) ↓ |
+|-----------|----------:|-------------------:|--------------------:|----------------:|
+| tensorflow | **1.570** | 55.4 | **10.85** | 620 |
+| **ours (mantissa)** | 2.405 | 55.3 | 10.45 | **189** |
+| torch | 4.193 | **42.0** | 10.60 | 387 |
+| vanilla numpy | 6.624 | 210.6 | 10.45 | 222 |
+
+**anomaly** — mnist, digit 1 held out of training (1800 fit samples),
+per-sample reconstruction MSE as the score, held-out 1s positive:
+
+| contender | fit (s) ↓ | reconstruct (ms) ↓ | ROC-AUC | peak RSS (MB) ↓ |
+|-----------|----------:|-------------------:|--------:|----------------:|
+| tensorflow | **1.320** | 55.6 | 0.131 | 612 |
+| **ours (mantissa)** | 2.066 | 55.0 | 0.174 | **185** |
+| torch | 3.593 | **42.1** | 0.064 | 382 |
+| vanilla numpy | 5.750 | 210.5 | 0.174 | 219 |
+
+**superres** — mnist 28 → 14 (2×2 mean) → nearest-upscaled back to 28
+outside the net, `srcnn` refines; the nearest-upscaled input scores
+**17.82 dB**, the floor:
+
+| contender | fit (s) ↓ | reconstruct (ms) ↓ | PSNR (dB) ↑ | peak RSS (MB) ↓ |
+|-----------|----------:|-------------------:|------------:|----------------:|
+| **ours (mantissa)** | **1.712** | **42.8** | **18.12** | **195** |
+| tensorflow | 1.860 | 58.6 | 18.06 | 643 |
+| torch | 5.420 | 72.8 | 17.74 | 388 |
+| vanilla numpy | 6.972 | 188.3 | 18.12 | 254 |
+
+![median fit time per task per contender](assets/fit_time.png)
+![task metric per contender, one panel per task with its baseline](assets/task_metrics.png)
+![peak RSS per task per contender](assets/peak_rss.png)
+
+The galleries below are the models the benchmark trained — same seed,
+same test image, nothing retrained or cherry-picked:
+
+![denoising gallery: clean, noisy, ours, torch, tensorflow](assets/gallery_denoise.png)
+![super-resolution gallery: nearest input, ours, torch, tensorflow, ground truth](assets/gallery_superres.png)
+
+**The honest read.**
+- **Fit: TensorFlow's compiled graph leads three of four tasks** (1.32–1.57 s,
+  about 1.5× ahead of us); ours takes superres and beats torch eager
+  1.7–3.2× on every task; the numpy backend trails ours 2.7–4.1×. The
+  pattern has a mechanical explanation: autoencoder decoders convolve at
+  **full 28×28 resolution** — the heavy-conv regime where the cnn repo's
+  benchmark also found TF's graph executor strongest (mantissa 0.2.2's
+  conv-GEMM release closed that repo's VGG gap to 8%) — and our two
+  parameter-free decoder stages (`Upsample2D`, and the denoise task's
+  corruption) are memory-bound numpy running *between* engine calls,
+  where TF fuses everything into one graph. The control: `srcnn` is the
+  one architecture with **no upsample and no pooling** — pure engine
+  convolutions — and there ours is fastest outright. An engine-side
+  upsample/fusion primitive is the recorded next target.
+- **Reconstruct is a three-way photo finish** (42–73 ms across ours /
+  torch / tf per task, winner varying); the numpy backend is 4× slower.
+- **Peak memory is ours across the board**: 185–225 MB against ~385 MB
+  for torch and 612–643 MB for tensorflow — a 2× and ~3.2× gap, fresh
+  process, import included.
+- **Task quality lands in the same band for everyone**, as it must with
+  identical structure and budget: denoise within 0.13 dB (all 1.4–1.5 dB
+  above the noisy input), superres ours/tf above the nearest baseline
+  with torch 0.08 dB below it, compress spread 0.4 dB with TF ahead —
+  differences of this size are init/shuffle-stream noise (seeded per
+  framework; they cannot be made bit-identical across libraries), not
+  framework superiority. The engine's metrics match its numpy oracle's
+  to within 0.0002 dB on every deterministic task — same model, just
+  faster.
+- **The anomaly recipe fails honestly, for every framework** (AUC
+  0.06–0.17, far *below* chance 0.5). With digit 1 held out,
+  reconstruction-error detection breaks: 1s are the lowest-complexity
+  digit, and an autoencoder trained on the other nine reconstructs their
+  thin strokes *better* than average — reconstruction MSE is confounded
+  with image complexity, a known failure mode of the Sakurada & Yairi
+  recipe. The protocol pinned digit 1 before any measurement, so the
+  number is reported as measured; all four contenders agree, which is
+  exactly what the column is for — it compares frameworks, not the
+  recipe's wisdom.
+
+**Fairness caveats.** TF's one-time graph tracing is excluded from fit
+timing via an identical untimed warm-up for every contender (as imports
+are); torch runs eager, its default mode. CPU only — no MPS/Metal for
+anyone. The per-batch denoise corruption uses each framework's native
+RNG (numpy / `torch.randn` / a `tf.data` map) — same distribution,
+different streams. Keras is NHWC, so its dense bottleneck connects to a
+permuted flatten — identical parameter count and function class. Thread
+settings left at each framework's defaults and recorded in the JSON. All
+raw samples live in `bench/results/results.json` (regenerable,
+gitignored).
+
+**Environment.** Apple M4 · Python 3.9.6 · numpy 2.0.2 · torch 2.8.0 ·
+tensorflow 2.20.0 · mantissa 0.2.2 (f32 CNN primitives, conv-GEMM
+release) · 2026-07-13. Full run: 409 s.
+Reproduce: `python -m bench.contenders && python -m bench.speed &&
+python -m bench.plots`.
 <!-- END:BENCH -->
 
 ### Methodology
