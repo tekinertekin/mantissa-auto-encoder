@@ -15,6 +15,7 @@ except ImportError:
 
 from .layers import Reshape, Upsample2D
 from .model import Autoencoder, mse_loss_grad
+from . import models
 
 
 def __getattr__(name):
@@ -29,4 +30,4 @@ def __getattr__(name):
 
 __version__ = "0.1.0"
 __all__ = ["Autoencoder", "Upsample2D", "Reshape", "mse_loss_grad",
-           "datasets"]
+           "models", "datasets"]
