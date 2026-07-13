@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+.venv/
+.venv*/
+venv/
+# datasets live in the sibling cnn checkout's data/ — none are kept here
+data/
+*.npz
+# benchmark raw results — regenerable; only assets/*.png plots are committed
+bench/results/
+results/
+# packaging / test artifacts
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+# local tooling state
+.claude/
