@@ -19,10 +19,11 @@ used for — denoising, compression, anomaly detection, super-resolution.
 
 Deliberately minimal, like the rest of the family: NCHW float32 images,
 pixel MSE, plain SGD. No autograd graph, no optimizer zoo. The convolutions
-run in C on zero-copy float32 buffers; the loss and the nearest-neighbor
-upsample are memory-bound array movement and honestly stay in numpy. Layers
-allocate their scratch once per batch shape and reuse it — steady-state
-training does no per-batch allocation.
+and the nearest-neighbor upsample run in C on zero-copy float32 buffers
+(the upsample since mantissa 0.2.3, with an automatic numpy fallback for
+older engines); the loss is memory-bound array movement and honestly stays
+in numpy. Layers allocate their scratch once per batch shape and reuse it —
+steady-state training does no per-batch allocation.
 
 ## Install
 
@@ -198,10 +199,10 @@ beat:
 
 | contender | fit (s) ↓ | reconstruct (ms) ↓ | PSNR (dB) ↑ | peak RSS (MB) ↓ |
 |-----------|----------:|-------------------:|------------:|----------------:|
-| tensorflow | **1.539** | 58.3 | 14.17 | 632 |
-| **ours (mantissa)** | 2.336 | 53.7 | **14.29** | 225 |
-| torch | 4.224 | **48.2** | 14.23 | 385 |
-| vanilla numpy | 6.958 | 236.2 | 14.23 | **213** |
+| tensorflow | **1.352** | 53.3 | 14.17 | 632 |
+| **ours (mantissa)** | 1.541 | **35.1** | **14.31** | **190** |
+| torch | 4.025 | 41.3 | 14.23 | 358 |
+| vanilla numpy | 6.449 | 225.4 | 14.30 | 223 |
 
 **compress** — mnist through a 32-float code, then uint8-quantized: 32
 code bytes + an 8-byte range header = 40 B/image vs the 784-byte uint8
@@ -210,20 +211,20 @@ size — the float32-code PSNR is in the JSON):
 
 | contender | fit (s) ↓ | reconstruct (ms) ↓ | PSNR @ 19.6× (dB) ↑ | peak RSS (MB) ↓ |
 |-----------|----------:|-------------------:|--------------------:|----------------:|
-| tensorflow | **1.570** | 55.4 | **10.85** | 620 |
-| **ours (mantissa)** | 2.405 | 55.3 | 10.45 | **189** |
-| torch | 4.193 | **42.0** | 10.60 | 387 |
-| vanilla numpy | 6.624 | 210.6 | 10.45 | 222 |
+| tensorflow | **1.399** | 55.6 | **10.85** | 618 |
+| **ours (mantissa)** | 1.643 | **37.6** | 10.45 | **188** |
+| torch | 3.977 | 41.5 | 10.60 | 383 |
+| vanilla numpy | 6.202 | 207.9 | 10.45 | 222 |
 
 **anomaly** — mnist, digit 1 held out of training (1800 fit samples),
 per-sample reconstruction MSE as the score, held-out 1s positive:
 
 | contender | fit (s) ↓ | reconstruct (ms) ↓ | ROC-AUC | peak RSS (MB) ↓ |
 |-----------|----------:|-------------------:|--------:|----------------:|
-| tensorflow | **1.320** | 55.6 | 0.131 | 612 |
-| **ours (mantissa)** | 2.066 | 55.0 | 0.174 | **185** |
-| torch | 3.593 | **42.1** | 0.064 | 382 |
-| vanilla numpy | 5.750 | 210.5 | 0.174 | 219 |
+| tensorflow | **1.290** | 56.8 | 0.131 | 611 |
+| **ours (mantissa)** | 1.479 | **37.9** | 0.174 | **185** |
+| torch | 3.635 | 41.8 | 0.064 | 381 |
+| vanilla numpy | 5.649 | 210.1 | 0.174 | 217 |
 
 **superres** — mnist 28 → 14 (2×2 mean) → nearest-upscaled back to 28
 outside the net, `srcnn` refines; the nearest-upscaled input scores
@@ -231,10 +232,10 @@ outside the net, `srcnn` refines; the nearest-upscaled input scores
 
 | contender | fit (s) ↓ | reconstruct (ms) ↓ | PSNR (dB) ↑ | peak RSS (MB) ↓ |
 |-----------|----------:|-------------------:|------------:|----------------:|
-| **ours (mantissa)** | **1.712** | **42.8** | **18.12** | **195** |
-| tensorflow | 1.860 | 58.6 | 18.06 | 643 |
-| torch | 5.420 | 72.8 | 17.74 | 388 |
-| vanilla numpy | 6.972 | 188.3 | 18.12 | 254 |
+| **ours (mantissa)** | **1.789** | **44.5** | **18.12** | **197** |
+| tensorflow | 1.859 | 64.9 | 18.06 | 557 |
+| torch | 5.476 | 84.7 | 17.74 | 388 |
+| vanilla numpy | 6.935 | 197.5 | 18.12 | 256 |
 
 ![median fit time per task per contender](assets/fit_time.png)
 ![task metric per contender, one panel per task with its baseline](assets/task_metrics.png)
@@ -247,33 +248,41 @@ same test image, nothing retrained or cherry-picked:
 ![super-resolution gallery: nearest input, ours, torch, tensorflow, ground truth](assets/gallery_superres.png)
 
 **The honest read.**
-- **Fit: TensorFlow's compiled graph leads three of four tasks** (1.32–1.57 s,
-  about 1.5× ahead of us); ours takes superres and beats torch eager
-  1.7–3.2× on every task; the numpy backend trails ours 2.7–4.1×. The
-  pattern has a mechanical explanation: autoencoder decoders convolve at
-  **full 28×28 resolution** — the heavy-conv regime where the cnn repo's
-  benchmark also found TF's graph executor strongest (mantissa 0.2.2's
-  conv-GEMM release closed that repo's VGG gap to 8%) — and our two
-  parameter-free decoder stages (`Upsample2D`, and the denoise task's
-  corruption) are memory-bound numpy running *between* engine calls,
-  where TF fuses everything into one graph. The control: `srcnn` is the
-  one architecture with **no upsample and no pooling** — pure engine
-  convolutions — and there ours is fastest outright. An engine-side
-  upsample/fusion primitive is the recorded next target.
-- **Reconstruct is a three-way photo finish** (42–73 ms across ours /
-  torch / tf per task, winner varying); the numpy backend is 4× slower.
-- **Peak memory is ours across the board**: 185–225 MB against ~385 MB
-  for torch and 612–643 MB for tensorflow — a 2× and ~3.2× gap, fresh
-  process, import included.
+- **Fit: TensorFlow's compiled graph still leads three of four tasks,
+  but the gap collapsed from ~1.5× to 1.14–1.17×.** The previous run's
+  recorded next target — an engine-side upsample primitive — landed in
+  mantissa 0.2.3 (`upsample2d`; at these decoder shapes the numpy
+  forward ran at 4 vs 74 GB/s and the backward's fused `np.sum` over two
+  interleaved length-k axes was ~9× off, up to 47× end-to-end), and our
+  denoise fit fell 2.34 → 1.54 s. Ours keeps superres — the control
+  architecture with **no upsample and no pooling**, pure engine
+  convolutions — and beats torch eager 2.4–3.1× on every task; the
+  numpy backend trails ours 3.8–4.2×. TF's remaining lead has the same
+  mechanical explanation as before, now smaller: decoders convolve at
+  **full 28×28 resolution** — the heavy-conv regime where the cnn
+  repo's benchmark also found TF's graph executor strongest — and the
+  stages still running as numpy between engine calls (the denoise
+  corruption, batch staging, the MSE/loss step) are what TF fuses into
+  one graph.
+- **Reconstruct is now ours on all four tasks** (35–45 ms; torch
+  41–85, tf 53–65 — what was a three-way photo finish broke open when
+  the decoder's upsample forward moved into C); the numpy backend is
+  4.4–6.4× slower than ours.
+- **Peak memory is ours across the board**: 185–197 MB against
+  358–388 MB for torch and 557–632 MB for tensorflow — a ~2× and
+  ~3× gap, fresh process, import included.
 - **Task quality lands in the same band for everyone**, as it must with
-  identical structure and budget: denoise within 0.13 dB (all 1.4–1.5 dB
+  identical structure and budget: denoise within 0.14 dB (all 1.4–1.5 dB
   above the noisy input), superres ours/tf above the nearest baseline
   with torch 0.08 dB below it, compress spread 0.4 dB with TF ahead —
   differences of this size are init/shuffle-stream noise (seeded per
   framework; they cannot be made bit-identical across libraries), not
   framework superiority. The engine's metrics match its numpy oracle's
   to within 0.0002 dB on every deterministic task — same model, just
-  faster.
+  faster. Adopting the C upsample changed no deterministic-task metric
+  by even a printed digit versus the 0.2.2 run: every decoder here
+  upsamples by 2, where the C backward's block sum is bit-exact against
+  the numpy reduction.
 - **The anomaly recipe fails honestly, for every framework** (AUC
   0.06–0.17, far *below* chance 0.5). With digit 1 held out,
   reconstruction-error detection breaks: 1s are the lowest-complexity
@@ -290,15 +299,19 @@ timing via an identical untimed warm-up for every contender (as imports
 are); torch runs eager, its default mode. CPU only — no MPS/Metal for
 anyone. The per-batch denoise corruption uses each framework's native
 RNG (numpy / `torch.randn` / a `tf.data` map) — same distribution,
-different streams. Keras is NHWC, so its dense bottleneck connects to a
+different streams; ours draws it unseeded, so the denoise PSNR of
+ours/vanilla-numpy wobbles a few hundredths of a dB between benchmark
+runs (14.29 → 14.31 and 14.23 → 14.30 across the last two passes,
+vanilla's code unchanged) while the seeded torch/tf values repeat
+exactly. Keras is NHWC, so its dense bottleneck connects to a
 permuted flatten — identical parameter count and function class. Thread
 settings left at each framework's defaults and recorded in the JSON. All
 raw samples live in `bench/results/results.json` (regenerable,
 gitignored).
 
 **Environment.** Apple M4 · Python 3.9.6 · numpy 2.0.2 · torch 2.8.0 ·
-tensorflow 2.20.0 · mantissa 0.2.2 (f32 CNN primitives, conv-GEMM
-release) · 2026-07-13. Full run: 409 s.
+tensorflow 2.20.0 · mantissa 0.2.3 (f32 CNN primitives + the upsample2d
+decoder op) · 2026-07-14. Full run: 398 s.
 Reproduce: `python -m bench.contenders && python -m bench.speed &&
 python -m bench.plots`.
 <!-- END:BENCH -->
