@@ -5,11 +5,21 @@ subclass): ``build(in_shape, rng) -> out_shape``, ``forward``/``backward``
 taking a backend object, scratch allocated once per batch shape and reused
 across batches and epochs, ``step`` a no-op (both layers are parameter-free).
 
-Both layers are pure data movement, so they ignore the backend argument.
-Nearest-neighbor upsampling does zero arithmetic per output element — it is
-memory-bound, and numpy's strided broadcast assignment already moves the
-bytes at memcpy speed, so it stays in numpy on both backends. An engine
-primitive is future work, on the record; it would buy nothing today.
+Reshape is a pure view either way and always stays in numpy. Upsample2D is
+memory-bound (nearest-neighbor does zero arithmetic per output element), and
+the earlier note here claimed numpy's strided broadcast already moved the
+bytes at memcpy speed so a primitive "would buy nothing" — that was measured
+false. At these decoder shapes the numpy broadcast-assign runs at 4 vs 74
+GB/s forward, and the backward's fused ``np.sum`` over two interleaved
+length-k axes degenerates the reduction iterator (~9x slower than the block
+sum needs to be). mantissa v0.2.3 adds ``tk_upsample2d_nearest_f32`` /
+``_backward_f32`` (exposed as ``Session.upsample2d`` / ``upsample2d_backward``);
+measured at this package's decoder shapes: forward 200->41 and 416->37 us,
+backward 739->21 and 1415->30 us (up to 47x). Upsample2D uses the primitive
+when the backend offers it (``hasattr(backend, "upsample2d")`` — the mantissa
+Session does, the numpy oracle backend does not) and otherwise keeps the numpy
+expressions verbatim, so ``backend="numpy"`` stays pure and older engines fall
+back automatically.
 
 Why these two layers exist at all: the decoders here upsample with
 nearest-neighbor resize followed by a plain ``Conv2D`` instead of using
@@ -31,10 +41,13 @@ __all__ = ["Upsample2D", "Reshape"]
 class Upsample2D(Layer):
     """Nearest-neighbor upsampling: every pixel becomes a scale x scale block.
 
-    Forward is one broadcast assignment into the preallocated output viewed
-    as (n, c, h, scale, w, scale); backward is the exact adjoint — each input
-    pixel fed a scale x scale output block, so its gradient is that block's
-    sum (``np.sum`` over the two block axes, written into reused scratch).
+    Forward maps each input pixel to a scale x scale output block; backward is
+    the exact adjoint — the gradient of an input pixel is the sum of its
+    block. Both write into reused scratch. When the backend exposes the
+    v0.2.3 primitive (``upsample2d`` / ``upsample2d_backward``) the work
+    crosses into C; otherwise it runs the numpy forms (broadcast assign into
+    the output viewed as (n, c, h, scale, w, scale); ``np.sum`` over the two
+    block axes), which stay the oracle and older-engine fallback.
     """
 
     def __init__(self, scale: int = 2):
@@ -57,7 +70,10 @@ class Upsample2D(Layer):
         s = self._bufs(n)
         c, h, w = self.in_shape
         k = self.scale
-        s["Y"].reshape(n, c, h, k, w, k)[...] = X[:, :, :, None, :, None]
+        if hasattr(backend, "upsample2d"):
+            backend.upsample2d(X, s["Y"], n, c, h, w, k)
+        else:
+            s["Y"].reshape(n, c, h, k, w, k)[...] = X[:, :, :, None, :, None]
         return s["Y"]
 
     def backward(self, dY, backend, need_dx: bool = True):
@@ -65,7 +81,10 @@ class Upsample2D(Layer):
         s = self._bufs(n)
         c, h, w = self.in_shape
         k = self.scale
-        np.sum(dY.reshape(n, c, h, k, w, k), axis=(3, 5), out=s["dX"])
+        if hasattr(backend, "upsample2d_backward"):
+            backend.upsample2d_backward(dY, s["dX"], n, c, h, w, k)
+        else:
+            np.sum(dY.reshape(n, c, h, k, w, k), axis=(3, 5), out=s["dX"])
         return s["dX"]
 
 

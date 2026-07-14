@@ -33,6 +33,11 @@ pip install mantissa-autoencoder   # after PyPI publication
 This pulls in `mantissa-cnn >= 0.1.0` (which pulls the engine
 `mantissa-nn >= 0.2.1`).
 
+The engine-accelerated decoder path (nearest-neighbor upsample in C) needs
+`mantissa-nn >= 0.2.3` for `Session.upsample2d`; older engines and
+`backend="numpy"` fall back to the numpy expressions automatically — nothing
+breaks, it is just slower.
+
 From checkouts (works today, no PyPI needed): clone this repo, `cnn`, and
 [mantissa](https://github.com/tekinertekin/mantissa) side by side, build the
 engine (`make dist` there), then here:
