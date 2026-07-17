@@ -36,7 +36,7 @@ is per-layer and the layers live in mantissa_cnn; harvesting another
 package's parameter tensors to bypass its `step()` is not this package's
 call. Recorded for a coordinated change.
 
-Requires `mantissa-nn >= 0.2.3` for the fast path (declared as a soft
+Requires `mantissa-core >= 0.2.3` for the fast path (declared as a soft
 requirement: the package imports and runs against older engines via the
 numpy fallback).
 
