@@ -13,7 +13,7 @@ authors = [{ name = "Tekin Ertekin" }]
 dependencies = [
     "numpy>=1.20",
     # Layers, backends and datasets all come from mantissa-cnn (which pulls
-    # the engine mantissa-nn >= 0.2.1 once both are on PyPI). For the dev
+    # the engine mantissa-core >= 0.2.1 once both are on PyPI). For the dev
     # layout, `pip install -e ../cnn` first — the editable install satisfies
     # this requirement and finds a sibling mantissa/ checkout automatically.
     "mantissa-cnn>=0.1.0",
