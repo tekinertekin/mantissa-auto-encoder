@@ -28,7 +28,7 @@ steady-state training does no per-batch allocation.
 ## Install
 
 ```sh
-pip install mantissa-autoencoder   # after PyPI publication
+pip install mantissa-autoencoder
 ```
 
 This pulls in `mantissa-cnn >= 0.1.0` (which pulls the engine
@@ -98,7 +98,7 @@ code alone. Reconstruction error is the whole training signal (no labels),
 so the only way to do well is for the code to keep what actually matters
 about the image and drop the rest. The compression *is* the learning.
 
-<img src="assets/concepts/autoencoder.png" width="380" alt="autoencoder schema: input through encoder to a code, decoder reconstructs the input">
+<img src="https://raw.githubusercontent.com/tekinertekin/mantissa-auto-encoder/main/assets/concepts/autoencoder.png" width="380" alt="autoencoder schema: input through encoder to a code, decoder reconstructs the input">
 
 **Why our decoders upsample-then-convolve.** A decoder must grow small
 feature maps back to image size. The obvious inverse of convolution —
@@ -237,15 +237,15 @@ outside the net, `srcnn` refines; the nearest-upscaled input scores
 | torch | 5.476 | 84.7 | 17.74 | 388 |
 | vanilla numpy | 6.935 | 197.5 | 18.12 | 256 |
 
-![median fit time per task per contender](assets/fit_time.png)
-![task metric per contender, one panel per task with its baseline](assets/task_metrics.png)
-![peak RSS per task per contender](assets/peak_rss.png)
+![median fit time per task per contender](https://raw.githubusercontent.com/tekinertekin/mantissa-auto-encoder/main/assets/fit_time.png)
+![task metric per contender, one panel per task with its baseline](https://raw.githubusercontent.com/tekinertekin/mantissa-auto-encoder/main/assets/task_metrics.png)
+![peak RSS per task per contender](https://raw.githubusercontent.com/tekinertekin/mantissa-auto-encoder/main/assets/peak_rss.png)
 
 The galleries below are the models the benchmark trained — same seed,
 same test image, nothing retrained or cherry-picked:
 
-![denoising gallery: clean, noisy, ours, torch, tensorflow](assets/gallery_denoise.png)
-![super-resolution gallery: nearest input, ours, torch, tensorflow, ground truth](assets/gallery_superres.png)
+![denoising gallery: clean, noisy, ours, torch, tensorflow](https://raw.githubusercontent.com/tekinertekin/mantissa-auto-encoder/main/assets/gallery_denoise.png)
+![super-resolution gallery: nearest input, ours, torch, tensorflow, ground truth](https://raw.githubusercontent.com/tekinertekin/mantissa-auto-encoder/main/assets/gallery_superres.png)
 
 **The honest read.**
 - **Fit: TensorFlow's compiled graph still leads three of four tasks,
