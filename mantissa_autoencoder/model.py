@@ -11,7 +11,7 @@ swapped for a regression loss):
 - Memory: mini-batch input/target staging buffers are allocated once per
   fit (one set for full batches, one for the epoch tail) and refilled with
   ``np.take(..., out=...)``; layer scratch is allocated once per batch shape
-  (see mantissa_cnn.layers / mantissa_autoencoder.layers). Steady-state
+  (see mantissa_nn.layers / mantissa_autoencoder.layers). Steady-state
   training does no per-batch allocation.
 
 Denoising: ``fit(X, noise=...)`` applies the callable to the *input* batch
@@ -20,7 +20,7 @@ denoising-autoencoder recipe (Vincent, Larochelle, Bengio & Manzagol, 2008,
 "Extracting and Composing Robust Features with Denoising Autoencoders",
 *ICML*).
 
-Backends: exactly mantissa_cnn's — ``backend="mantissa"`` (default) runs
+Backends: the family's shared ones — ``backend="mantissa"`` (default) runs
 every layer primitive in the C engine (via a per-model Session when the
 engine offers one) and raises with the exact fix command when the engine is
 missing; ``backend="numpy"`` is the pure-numpy reference oracle.
@@ -32,8 +32,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from mantissa_cnn import _numpy_backend
-from mantissa_cnn._engine import cnn_engine
+from mantissa_nn import _numpy_backend
+from mantissa_cnn._engine import cnn_engine   # CNN feature gate: this model uses Conv2D
 
 __all__ = ["Autoencoder", "mse_loss_grad"]
 
@@ -57,7 +57,8 @@ class Autoencoder:
     Parameters
     ----------
     encoder_layers, decoder_layers : lists of Layer
-        Any mantissa_cnn layer (Conv2D / MaxPool2D / Flatten / Dense) plus
+        Any base/CNN layer (Conv2D / MaxPool2D from mantissa-cnn, Dense /
+        Flatten from mantissa-nn) plus
         this package's Upsample2D / Reshape. The split is what makes
         ``encode``/``decode`` meaningful; training runs the concatenation.
     seed : int

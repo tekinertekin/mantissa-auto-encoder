@@ -258,7 +258,7 @@ def _cpu_name() -> str:
 def _env_block() -> dict:
     """Versions and thread settings — thread knobs are left at each
     framework's default and RECORDED, not equalized."""
-    from mantissa_cnn import MANTISSA_MIN_VERSION
+    from mantissa_nn import MANTISSA_MIN_VERSION
     env = {
         "cpu": _cpu_name(),
         "python": platform.python_version(),

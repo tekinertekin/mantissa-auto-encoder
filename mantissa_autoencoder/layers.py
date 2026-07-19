@@ -1,6 +1,6 @@
 """The two decoder layers mantissa-cnn lacks: Upsample2D and Reshape.
 
-Same contract as :mod:`mantissa_cnn.layers` (whose ``Layer`` base these
+Same contract as :mod:`mantissa_nn.layers` (whose ``Layer`` base these
 subclass): ``build(in_shape, rng) -> out_shape``, ``forward``/``backward``
 taking a backend object, scratch allocated once per batch shape and reused
 across batches and epochs, ``step`` a no-op (both layers are parameter-free).
@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from mantissa_cnn.layers import Layer
+from mantissa_nn.layers import Layer
 
 __all__ = ["Upsample2D", "Reshape"]
 

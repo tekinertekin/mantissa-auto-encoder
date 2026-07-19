@@ -11,7 +11,8 @@ activation: pixel targets live in [0, 1] and MSE wants unsquashed output.
 """
 from __future__ import annotations
 
-from mantissa_cnn.layers import Conv2D, Dense, Flatten, MaxPool2D
+from mantissa_cnn.layers import Conv2D, MaxPool2D   # convolutional primitives
+from mantissa_nn.layers import Dense, Flatten       # shared base layers
 
 from .layers import Reshape, Upsample2D
 from .model import Autoencoder

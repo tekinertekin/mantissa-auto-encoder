@@ -13,7 +13,7 @@ subprocess with import cost included.
 Task recipes (dataset, model, task parameters) are pinned in
 :data:`mantissa_autoencoder.tasks.TASKS`.
 """
-N_TRAIN = 2000          # stratified subset sizes, mantissa_cnn.datasets.subset
+N_TRAIN = 2000          # stratified subset sizes, mantissa_autoencoder.datasets.subset
 N_TEST = 1000
 SEED = 0
 EPOCHS = 5

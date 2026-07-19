@@ -4,19 +4,22 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mantissa-autoencoder"
-version = "0.1.1"
-description = "Classic convolutional autoencoders on the mantissa C engine, built on mantissa-cnn"
+version = "0.1.2"
+description = "Classic convolutional autoencoders on the mantissa C engine, built on mantissa-nn and mantissa-cnn"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [{ name = "Tekin Ertekin" }]
 dependencies = [
     "numpy>=1.20",
-    # Layers, backends and datasets all come from mantissa-cnn (which pulls
-    # the engine mantissa-core >= 0.2.1 once both are on PyPI). For the dev
-    # layout, `pip install -e ../cnn` first — the editable install satisfies
-    # this requirement and finds a sibling mantissa/ checkout automatically.
-    "mantissa-cnn>=0.1.0",
+    # Shared base — Dense/Flatten layers, both backends, the image datasets —
+    # comes from mantissa-nn; the Conv2D/MaxPool2D layers come from
+    # mantissa-cnn (which itself depends on mantissa-nn and pulls the engine
+    # mantissa-core >= 0.2.1). For the dev layout, `pip install -e
+    # ../mantissa-nn ../cnn` first — the editable installs satisfy these and
+    # find a sibling mantissa/ checkout automatically.
+    "mantissa-nn>=0.1.0",
+    "mantissa-cnn>=0.2.1",
 ]
 
 [project.optional-dependencies]
@@ -25,7 +28,8 @@ dev = ["pytest>=7"]
 
 [project.urls]
 Homepage = "https://github.com/tekinertekin/mantissa-autoencoder"
-Base = "https://github.com/tekinertekin/mantissa-cnn"
+Base = "https://github.com/tekinertekin/mantissa-nn"
+Conv = "https://github.com/tekinertekin/mantissa-cnn"
 Engine = "https://github.com/tekinertekin/mantissa"
 
 [tool.setuptools]
