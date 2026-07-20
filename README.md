@@ -25,6 +25,21 @@ older engines); the loss is memory-bound array movement and honestly stays
 in numpy. Layers allocate their scratch once per batch shape and reuse it —
 steady-state training does no per-batch allocation.
 
+## The mantissa family
+
+Part of the **mantissa** family: a low-precision engine written in C, with
+small Python packages built on top. Each package sits under the one it depends
+on — ⭐ marks where you are, and every other name links to its repo.
+
+- [mantissa](https://github.com/tekinertekin/mantissa) — low-precision neural-network engine in C (the core)
+  - [mantissa-perceptron](https://github.com/tekinertekin/mantissa-perceptron) — perceptron & ADALINE, the linear classics
+  - [mantissa-nn](https://github.com/tekinertekin/mantissa-nn) — shared neural-net primitives (layers, engine binding)
+    - [mantissa-cnn](https://github.com/tekinertekin/mantissa-cnn) — convolutional networks for images
+      - ⭐ **mantissa-auto-encoder** — autoencoders for denoising & super-resolution *(you are here)*
+      - [mantissa-interpret](https://github.com/tekinertekin/mantissa-interpret) — CNN interpretability (occlusion, saliency, Grad-CAM)
+    - [mantissa-mlp](https://github.com/tekinertekin/mantissa-mlp) — multilayer perceptrons, fully-connected nets
+
+
 ## Install
 
 ```sh
